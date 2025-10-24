@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>羽毛球分配助手</title>
+  <style>
+    :root {
+      --bg: #f5f6fa;
+      --card: #fff;
+      --primary: #4a90e2;
+      --active: #42b983;
+      --danger: #e74c3c;
+      --text: #333;
+      --muted: #888;
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 20px));
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      line-height: 1.8;
+    }
+
+    .section {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    }
+
+    .section .inner {
+      padding-bottom: 12px
+    }
+
+    input,
+    select,
+    button {
+      font-size: 0.95rem;
+      padding: 12px 16px;
+      border-radius: 8px;
+      border: 1px solid #e6e9ef;
+      outline: none;
+      min-height: 44px;
+      touch-action: manipulation;
+    }
+
+    input, select {
+      -webkit-user-select: text;
+      user-select: text;
+    }
+
+    button {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      margin: 4px 6px 4px 0;
+      transition: background 0.15s;
+      white-space: nowrap;
+      min-width: 44px;
+    }
+
+    button.ghost {
+      background: #fff;
+      color: var(--primary);
+      border: 1px solid #e6efff
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed
+    }
+
+    button:active {
+      background: var(--primary);
+      opacity: 0.8;
+      transform: scale(0.98);
+    }
+
+    .player-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+      transition: max-height 0.25s ease;
+      overflow: hidden;
+    }
+
+    .player {
+      padding: 12px;
+      border-radius: 10px;
+      background: #f0f2f5;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-width: 120px;
+      max-width: calc(50% - 8px);
+      font-size: 0.95rem;
+      min-height: 44px;
+      touch-action: manipulation;
+    }
+
+    .player.free {
+      background: #e8f8f0;
+    }
+
+    .player.busy {
+      background: #fdecea;
+    }
+
+    .player button {
+      background: transparent;
+      color: var(--muted);
+      border: none;
+      padding: 4px;
+      margin-left: 8px;
+      min-height: auto;
+    }
+
+    .court {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+      box-shadow: 0 4px 12px rgba(20, 30, 80, 0.06);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .court-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+    }
+
+    .court-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: center
+    }
+
+    .court-status {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.03);
+    }
+
+    .status-idle {
+      background: #cfd8dc;
+    }
+
+    .status-playing {
+      background: var(--active);
+    }
+
+    .court-canvas {
+      width: 100%;
+      height: 110px;
+      background: linear-gradient(180deg, #cfeffb, #a2d5f2);
+      border-radius: 10px;
+      margin: 0 auto;
+      position: relative;
+      overflow: hidden;
+      padding: 8px;
+    }
+
+    .player-slot {
+      position: absolute;
+      min-width: 40%;
+      height: 26px;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 8px;
+      text-align: center;
+      font-size: 0.92rem;
+      line-height: 26px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    }
+
+    .controls {
+      display: flex;
+      gap: 6px;
+      width: 100%;
+      overflow-x: auto;
+      padding-bottom: 6px;
+    }
+
+    .controls::-webkit-scrollbar {
+      display: none
+    }
+
+    .fold-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      touch-action: manipulation;
+      padding: 8px 0;
+      min-height: 44px;
+    }
+
+    @media (max-width:600px) {
+      .player {
+        min-width: 48%
+      }
+
+      .court-canvas {
+        height: 120px
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="section">
+    <div class="fold-toggle" onclick="toggleFold()">
+      <h2>人员管理 <span id="playerCount" style="font-size:0.9rem;color:var(--muted);margin-left:6px"></span></h2>
+      <div style="display:flex;align-items:center"><span id="foldIcon" style="color:var(--muted)">▼</span></div>
+    </div>
+    <div class="inner" id="playerSection">
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px" id="playerInputRow">
+        <input id="playerName" placeholder="输入姓名" />
+        <button id="addPlayerBtn" onclick="addPlayer()">添加</button>
+      </div>
+      <div class="player-list" id="playerList"></div>
+    </div>
+  </div>
+
+  <div class="section" style="padding-bottom:18px">
+    <h2>场地管理</h2>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+      <input id="courtName" placeholder="输入场地名" />
+      <button onclick="addCourt()">添加场地</button>
+    </div>
+    <div id="courtList" style="margin-top:10px"></div>
+  </div>
+
+  <script>
+    // 触摸事件处理 - 优化在文件App中的体验
+    function setupTouchHandlers() {
+      let startY = 0;
+      let currentY = 0;
+      let isScrolling = false;
+      
+      // 处理触摸开始
+      document.addEventListener('touchstart', function(e) {
+        startY = e.touches[0].clientY;
+        isScrolling = false;
+        
+        // 只在非交互元素上尝试阻止默认行为
+        const tagName = e.target.tagName;
+        const isInteractive = ['INPUT', 'BUTTON', 'SELECT', 'TEXTAREA'].includes(tagName);
+        const isPlayer = e.target.closest('.player');
+        const isFoldToggle = e.target.closest('.fold-toggle');
+        
+        if (!isInteractive && !isPlayer && !isFoldToggle) {
+          // 轻微阻止以减少工具栏触发
+          e.preventDefault();
+        }
+      }, { passive: false });
+      
+      // 处理触摸移动
+      document.addEventListener('touchmove', function(e) {
+        currentY = e.touches[0].clientY;
+        const deltaY = Math.abs(currentY - startY);
+        
+        if (deltaY > 5) {
+          isScrolling = true;
+        }
+        
+        const tagName = e.target.tagName;
+        const isInteractive = ['INPUT', 'BUTTON', 'SELECT', 'TEXTAREA'].includes(tagName);
+        
+        if (!isInteractive && isScrolling) {
+          // 滚动时不阻止，允许正常滚动
+          return;
+        }
+      }, { passive: false });
+      
+      // 处理触摸结束
+      document.addEventListener('touchend', function(e) {
+        const tagName = e.target.tagName;
+        const isInteractive = ['INPUT', 'BUTTON', 'SELECT', 'TEXTAREA'].includes(tagName);
+        const isPlayer = e.target.closest('.player');
+        const isFoldToggle = e.target.closest('.fold-toggle');
+        
+        if (!isInteractive && !isPlayer && !isFoldToggle && !isScrolling) {
+          // 轻微阻止点击事件的默认行为
+          e.preventDefault();
+        }
+        isScrolling = false;
+      }, { passive: false });
+      
+      // 阻止上下文菜单（长按菜单）
+      document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        return false;
+      });
+    }
+
+    const state = {
+      players: JSON.parse(localStorage.getItem('players') || '[]'),
+      courts: JSON.parse(localStorage.getItem('courts') || '[]'),
+      folded: false
+    };
+
+    // helpers
+    function save() {
+      localStorage.setItem('players', JSON.stringify(state.players));
+      localStorage.setItem('courts', JSON.stringify(state.courts));
+      render();
+    }
+
+    function addPlayer() {
+      const nameEl = document.getElementById('playerName');
+      const name = nameEl.value.trim(); if (!name) return;
+      state.players.push({ name, played: 0, busy: false });
+      nameEl.value = ''; save();
+    }
+
+    function removePlayer(name) {
+      // remove from players and remove from any court
+      state.players = state.players.filter(p => p.name !== name);
+      state.courts.forEach(c => { c.players = c.players.filter(n => n !== name); });
+      save();
+    }
+
+    function addCourt() {
+      const name = document.getElementById('courtName').value.trim() || `场地${state.courts.length + 1}`;
+      state.courts.push({ id: Date.now() + Math.random(), name, type: '双打', status: 'idle', players: [] });
+      document.getElementById('courtName').value = ''; save();
+    }
+
+    function removeCourt(id) { state.courts = state.courts.filter(c => c.id !== id); save(); }
+
+    function toggleType(id) { const c = state.courts.find(x => x.id === id); c.type = c.type === '单打' ? '双打' : '单打'; save(); }
+
+    // assignment logic:
+    // - When assigning to court `id`, consider as occupied ONLY players that are assigned to other courts
+    // - Players assigned to THIS court but match not started are considered available (so reassign can reshuffle)
+    // - No one is marked busy until match starts
+    // - Weighted random: compute maxPlayed, weight = (maxPlayed - played + 1)^alpha so those with fewer played have higher weight
+    function assignPlayers(id) {
+      const c = state.courts.find(x => x.id === id);
+      const need = c.type === '单打' ? 2 : 4;
+      // occupied names on other courts
+      const occupiedOther = state.courts.filter(ct => ct.id !== id).flatMap(ct => ct.players);
+      // available players: not busy and not occupied by other courts
+      const available = state.players.filter(p => !p.busy && !occupiedOther.includes(p.name));
+      if (available.length < need) { alert('空闲人员不足 (排除其他场地已分配的人员)'); return; }
+
+      const maxPlayed = Math.max(0, ...state.players.map(p => p.played || 0));
+      const alpha = 1.6; // 越大越偏向已打少的
+      const pool = available.map(p => ({ p, w: Math.pow((maxPlayed - (p.played || 0) + 1), alpha) }));
+
+      const chosen = weightedPickWithoutReplacement(pool, need).map(x => x.p.name);
+      c.players = chosen;
+      // do not set busy here; busy becomes true only when startMatch
+      save();
+    }
+
+    function weightedPickWithoutReplacement(pool, k) {
+      const copy = pool.map(x => ({ p: x.p, w: x.w }));
+      const res = [];
+      for (let i = 0; i < k; i++) {
+        const total = copy.reduce((s, x) => s + x.w, 0);
+        let r = Math.random() * total; let idx = 0;
+        for (let j = 0; j < copy.length; j++) { r -= copy[j].w; if (r <= 0) { idx = j; break; } }
+        res.push(copy[idx]); copy.splice(idx, 1);
+      }
+      return res;
+    }
+
+    function startMatch(id) {
+      const c = state.courts.find(x => x.id === id);
+      const need = c.type === '单打' ? 2 : 4;
+      if (!c.players || c.players.length < need) { alert('请先给场地分配足够人数'); return; }
+      c.status = 'playing';
+      c.players.forEach(name => {
+        const p = state.players.find(pp => pp.name === name); if (p) p.busy = true;
+      });
+      save();
+    }
+
+    function endMatch(id) {
+      const c = state.courts.find(x => x.id === id);
+      c.status = 'idle';
+      c.players.forEach(name => {
+        const p = state.players.find(pp => pp.name === name); if (p) { p.played = (p.played || 0) + 1; p.busy = false; }
+      });
+      c.players = [];
+      save();
+    }
+
+    function toggleFold() { state.folded = !state.folded; render(); }
+
+    function render() {
+      // players
+      const playerSection = document.getElementById('playerSection');
+      const foldIcon = document.getElementById('foldIcon');
+      const playerCount = document.getElementById('playerCount');
+      playerCount.textContent = `(${state.players.length})`;
+      if (state.folded) {
+        playerSection.style.maxHeight = '0';
+        playerSection.style.padding = '0 0 0 0';
+        document.getElementById('playerInputRow').style.display = 'none';
+        document.getElementById('playerList').style.display = 'none';
+        foldIcon.textContent = '▲';
+      } else {
+        playerSection.style.maxHeight = '1000px';
+        playerSection.style.padding = '8px 0 12px 0';
+        document.getElementById('playerInputRow').style.display = 'flex';
+        document.getElementById('playerList').style.display = 'flex';
+        foldIcon.textContent = '▼';
+      }
+
+      const playerList = document.getElementById('playerList');
+      playerList.innerHTML = '';
+      state.players.forEach(p => {
+        const d = document.createElement('div'); d.className = 'player ' + (p.busy ? 'busy' : 'free');
+        const left = document.createElement('div'); left.textContent = `${p.name} (${p.played || 0})`;
+        const del = document.createElement('button'); del.textContent = '×'; del.onclick = () => { if (confirm('删除 ' + p.name + ' ?')) removePlayer(p.name); };
+        d.appendChild(left); d.appendChild(del);
+        playerList.appendChild(d);
+      });
+
+      // courts
+      const courtList = document.getElementById('courtList'); courtList.innerHTML = '';
+      state.courts.forEach(c => {
+        const div = document.createElement('div'); div.className = 'court';
+        const statusClass = c.status === 'playing' ? 'status-playing' : 'status-idle';
+        const meta = document.createElement('div'); meta.className = 'court-header';
+        const title = document.createElement('div'); title.innerHTML = `<strong>${c.name}</strong><div style="font-size:0.85rem;color:var(--muted)">类型: ${c.type} · ${c.players.length}人</div>`;
+        const stat = document.createElement('div'); stat.innerHTML = `<div class='court-status ${statusClass}'></div>`;
+        meta.appendChild(title); meta.appendChild(stat);
+        div.appendChild(meta);
+
+        const canvas = document.createElement('div'); canvas.className = 'court-canvas';
+        // render player slots inside canvas
+        (c.players || []).forEach((n, i) => {
+          const slot = document.createElement('div'); slot.className = 'player-slot';
+          // position: two columns
+          const topPercent = 12 + Math.floor(i / 2) * 28; // 12%, 40%...
+          const leftPercent = (i % 2 === 0) ? 8 : 52;
+          slot.style.top = topPercent + '%';
+          slot.style.left = leftPercent + '%';
+          slot.textContent = n;
+          canvas.appendChild(slot);
+        });
+        div.appendChild(canvas);
+
+        const controls = document.createElement('div'); controls.className = 'controls';
+        // show assign/toggle only when idle
+        if (c.status === 'idle') {
+          const a = document.createElement('button'); a.textContent = '自动分配'; a.onclick = () => assignPlayers(c.id);
+          const t = document.createElement('button'); t.textContent = '单双切换'; t.onclick = () => toggleType(c.id);
+          controls.appendChild(a); controls.appendChild(t);
+        }
+        if (c.status === 'idle' && (c.players || []).length > 0) {
+          const s = document.createElement('button'); s.textContent = '开始对局'; s.onclick = () => startMatch(c.id); controls.appendChild(s);
+        }
+        if (c.status === 'playing') {
+          const e = document.createElement('button'); e.textContent = '结束对局'; e.onclick = () => endMatch(c.id); controls.appendChild(e);
+        }
+        const rm = document.createElement('button'); rm.textContent = '删除'; rm.className = 'ghost'; rm.onclick = () => { if (confirm('删除场地 ' + c.name + ' ?')) removeCourt(c.id); };
+        controls.appendChild(rm);
+
+        div.appendChild(controls);
+        courtList.appendChild(div);
+      });
+    }
+
+    // 初始化
+    document.addEventListener('DOMContentLoaded', function() {
+      setupTouchHandlers();
+      
+      // initial demo if empty
+      if (state.players.length === 0 && state.courts.length === 0) {
+        save();
+      }
+
+      render();
+    });
+  </script>
+</body>
+
+</html>
